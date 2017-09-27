@@ -1,7 +1,9 @@
 # -*- coding: utf-8-*-
 
+#python 2.7
 import time,threading
 import os
+import sys
 import telnetlib
 import xlrd
 from xlutils.copy import copy;
@@ -27,9 +29,13 @@ cap_num = 2
 cap_soft_version = 'b36_u'
 cap_upgrade_version = 'b37'
 
+xls_name = u"EUHT基站.xlsx"
+xls_name_new = u"EUHT基站_new.xlsx"
+#xls_path = u'E:/back/work/EUHT基站.xlsx'
+#xls_new = u'E:/back/work/EUHT基站_new.xlsx'
+xls_path = sys.path[0] + "\\" + xls_name
+xls_new = sys.path[0] + "\\" + xls_name[0:len(xls_name)-5:]+"_new.xlsx"
 
-xls_path = u'E:/back/work/EUHT基站.xlsx'
-xls_new = u'E:/back/work/EUHT基站_new.xlsx'
 xls_routerip_col = 6
 xls_capip_col = 7
 xls_village_row = 1
@@ -39,12 +45,15 @@ xls_capnum_col = 11
 
 xls_cap1_channel = 12
 
-xls_router_status = 15
-xls_router_status 
-xls_cap1_status = 16
-xls_cap1_version = 25
+xls_router_status = xls_cap1_channel+3
+xls_cap1_status = xls_router_status+1
 
-xls_cap1_txpower = 31
+xls_cap1_temp = xls_cap1_status+3
+xls_cap1_humi = xls_cap1_temp +3
+
+xls_cap1_version = xls_cap1_humi+3
+
+xls_cap1_txpower = xls_cap1_version+3
 
 class CityInfo (object):
 
@@ -181,6 +190,44 @@ class CAP (object):
             print ("get cap channel vesrion fail ")
         return "unkown"
 
+    def get_cap_temp(self):
+        try:
+            tn = self.tn
+            tn.read_until(cap_term,10)
+            tn.write(b"/usr/local/net-snmp/bin/snmpget -v2c -c euhtpub 127.0.0.1 1.3.6.1.4.1.59418.1.1.1.1.2.1.18.0 \n")
+            time.sleep(3)
+            info = tn.read_very_eager() 
+            capchaninfo = info.decode()
+            print ("--------111"+capchaninfo+"222----")
+            captemp = capchaninfo[capchaninfo.find('INTEGER:')+9:capchaninfo.find('INTEGER:')+12]
+            print captemp
+            #if (capver.find(cap_upgrade_version) == -1):
+                #print ("low vesion")
+            return float(captemp)/10
+        except Exception as e:
+            print (e)
+            print ("get cap channel vesrion fail ")
+        return "unkown"
+
+    def get_cap_humi(self):
+        try:
+            tn = self.tn
+            tn.read_until(cap_term,10)
+            tn.write(b"/usr/local/net-snmp/bin/snmpget -v2c -c euhtpub 127.0.0.1 1.3.6.1.4.1.59418.1.1.1.1.2.1.19.0\n")
+            time.sleep(3)
+            info = tn.read_very_eager() 
+            capchaninfo = info.decode()
+            print ("--------111"+capchaninfo+"222----")
+            caphumi = capchaninfo[capchaninfo.find('INTEGER:')+9:capchaninfo.find('INTEGER:')+12]
+            print caphumi
+            #if (capver.find(cap_upgrade_version) == -1):
+                #print ("low vesion")
+            return float(caphumi)/10
+        except Exception as e:
+            print (e)
+            print ("get cap channel vesrion fail ")
+        return "unkown"
+
     def exit_cap (self):
         tn  = self.tn
         tn.write(b"exit\n")
@@ -212,6 +259,13 @@ def work (city,sheet,newsheet):
     newsheet.write(0, xls_cap1_txpower+1, "CAP2power")
     newsheet.write(0, xls_cap1_txpower+2, "CAP3power")
     """
+    newsheet.write(0, xls_cap1_temp, u"CAP1温度")
+    newsheet.write(0, xls_cap1_temp+1, u"CAP2温度")
+    newsheet.write(0, xls_cap1_temp+2, u"CAP3温度")
+
+    newsheet.write(0, xls_cap1_humi, u"CAP1湿度")
+    newsheet.write(0, xls_cap1_humi+1, u"CAP2湿度")
+    newsheet.write(0, xls_cap1_humi+2, u"CAP3湿度")
 
     while (xls_village_row < sheet.nrows):
         print sheet.cell_value(xls_village_row, 1),sheet.cell_value(xls_village_row, 2),sheet.cell_value(xls_village_row, 3),sheet.cell_value(xls_village_row, 4)
@@ -258,7 +312,7 @@ def work (city,sheet,newsheet):
                     newsheet.write(xls_village_row, xls_cap1_version + telnet_cap_num, cap_soft_version)
                      """
                     cap_channel_info = cap.get_cap_channel ()
-                    print "---------cap "+cap_channel_info
+                    print "---------cap ",cap_channel_info
                     newsheet.write(xls_village_row, xls_cap1_channel + telnet_cap_num, cap_channel_info)
                    
                     """
@@ -266,6 +320,16 @@ def work (city,sheet,newsheet):
                     print ("---------cap "+cap_txpower_info)
                     newsheet.write(xls_village_row, xls_cap1_txpower + telnet_cap_num, cap_txpower_info)   
                     """
+
+                    cap_temp_info = cap.get_cap_temp ()
+                    print "---------cap ",cap_temp_info
+                    newsheet.write(xls_village_row, xls_cap1_temp + telnet_cap_num,cap_temp_info)   
+
+
+                    cap_humi_info = cap.get_cap_humi ()
+                    print "---------cap ",cap_humi_info
+                    newsheet.write(xls_village_row, xls_cap1_humi + telnet_cap_num,cap_humi_info)   
+
                     newsheet.write(xls_village_row, xls_cap1_status + telnet_cap_num, "on")            
                     cap.exit_cap ()
                 else:
@@ -280,6 +344,8 @@ def work (city,sheet,newsheet):
 
 
 #读取数据
+
+
 book = xlrd.open_workbook(xls_path)
 print "\nThe number of worksheets in %s is %d" %(xls_path, book.nsheets)
 
